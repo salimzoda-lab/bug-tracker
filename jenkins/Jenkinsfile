@@ -1,49 +1,49 @@
 pipeline {
-    agent any
+  agent any
 
-    stages {
-        stage('Unit Tests - Backend') {
-            agent {
-                docker {
-                    image 'snakee/golang-junit:1.21'
-                    reuseNode true
-                }
-            }
-            environment {
-                XDG_CACHE_HOME = "${WORKSPACE}/.cache"
-                GOCACHE        = "${WORKSPACE}/.cache/go-build"
-            }
-            steps {
-                dir('bugtracker-backend') {
-                    sh '''
-                      mkdir -p "$XDG_CACHE_HOME" "$GOCACHE"
-                      go version
-                      go test -v ./...
-                    '''
-                }
-            }
+  stages {
+    stage('Unit Tests - Backend') {
+      agent {
+        docker {
+          image 'snakee/golang-junit:1.21'   // keep your image
+          reuseNode true
         }
-
-        stage('Unit test -Frontend') {
-            agent {
-                docker {
-                    image 'node:20-alpine'
-                    reuseNode true
-                }
-            }
-            steps {
-                dir('bugtracker-frontend') {
-                    sh '''
-                      npm ci
-                      npm test
-                    '''
-                }
-            }
-            post {
-                always {
-                    junit 'bugtracker-frontend/test-results.xml'
-                }
-            }
+      }
+      environment {
+        XDG_CACHE_HOME = "${WORKSPACE}/.cache"
+        GOCACHE        = "${WORKSPACE}/.cache/go-build"
+        GOMODCACHE     = "${WORKSPACE}/.gomodcache"
+        GOFLAGS        = "-modcacherw"      // makes cached files writable across runs
+      }
+      steps {
+        dir('bugtracker-backend') {
+          sh '''
+            mkdir -p "$XDG_CACHE_HOME" "$GOCACHE" "$GOMODCACHE"
+            echo "GOCACHE=$GOCACHE"
+            echo "GOMODCACHE=$GOMODCACHE"
+            go version
+            go mod download
+            go test -v ./...
+          '''
         }
+      }
     }
+
+    stage('Unit test -Frontend') {
+      agent {
+        docker { image 'node:20-alpine'; reuseNode true }
+      }
+      steps {
+        dir('bugtracker-frontend') {
+          sh '''
+            npm ci
+            npm test
+          '''
+        }
+      }
+      post {
+        always { junit 'bugtracker-frontend/test-results.xml' }
+      }
+    }
+  }
 }
